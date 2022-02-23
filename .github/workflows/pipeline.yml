@@ -50,33 +50,25 @@ jobs:
       - name: Terraform Plan
         id: plan
         if: github.event_name == 'pull_request'
-        run: |
-          EXITCODE=0
-          terraform plan -detailed-exitcode -out plan || EXITCODE=$?
-          echo "EXITCODE: $EXITCODE"
-          if [ $EXITCODE -eq 0 ]; then
-            echo "::set-output name=planresult::unchanged"
-          elif [ $EXITCODE -eq 2 ]; then
-            echo "::set-output name=planresult::success"
-          else
-            echo "::set-output name=planresult::error"
-          fi
+        run: terraform plan -no-color -out plan
+        continue-on-error: true
       - name: Terraform show plan output
         uses: mathiasvr/command-output@v1
-        if: github.event_name == 'pull_request' && steps.plan.outputs.planresult == 'success'
+        if: github.event_name == 'pull_request' && steps.plan.outcome == 'success'
         id: plan_output
         with:
           run: terraform show -no-color plan
       - name: Comment on PR on success
         uses: actions/github-script@v6
-        if: github.event_name == 'pull_request' && steps.plan.outputs.planresult == 'success'
+        if: github.event_name == 'pull_request' && steps.plan.outcome == 'success'
         env:
           PLAN: "${{ steps.plan_output.outputs.stdout }}"
         with:
           script: |
             const output = `##### Plan:
             ###### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            ###### Terraform Plan 📖\`${{ steps.plan.outputs.planresult }}\`
+            ###### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            ###### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
             <details><summary>Show Plan</summary>
 
             \`\`\`terraform\n
@@ -92,17 +84,15 @@ jobs:
             })
       - name: Comment on PR on error
         uses: actions/github-script@v6
-        if: github.event_name == 'pull_request' && steps.plan.outputs.planresult == 'error'
+        if: github.event_name == 'pull_request' && steps.plan.outcome == 'failure'
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const output = `##### Plan:
             ###### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            ###### Terraform Plan 📖\`${{ steps.plan.outputs.planresult }}\`
+            ###### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            ###### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
 
-            \`\`\`terraform\n
-            ${{ steps.plan.outputs.stdout }}
-            ${{ steps.plan.outputs.stderr }}
-            \n\`\`\`
             *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -111,10 +101,8 @@ jobs:
               body: output
             })
       - name: Terraform Plan Status
-        if: steps.plan.outcome == 'error'
-        run: |
-          echo "Terraform plan returned ${{ steps.plan.outputs.planresult }}"
-          exit 1 
+        if: steps.plan.outcome == 'failure'
+        run: exit 1 
       - name: Terraform Apply
         id: apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
