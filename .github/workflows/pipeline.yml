@@ -51,7 +51,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           EXITCODE=0
-          terraform plan --var-file=live.tfvars -detailed-exitcode -out plan || EXITCODE=$?
+          terraform plan -detailed-exitcode -out plan || EXITCODE=$?
           echo "EXITCODE: $EXITCODE"
           if [ $EXITCODE -eq 0 ]; then
             echo "::set-output name=planresult::unchanged"
