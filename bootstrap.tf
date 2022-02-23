@@ -1,5 +1,5 @@
 # Create DynamoDB for locking the state file when its used
-resource "aws_dynamodb_table" "terraform_locks" {
+resource "aws_dynamodb_table" "terraform_lock" {
   name         = var.dynamo_table
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
@@ -73,7 +73,7 @@ data "aws_iam_policy_document" "github_readonly" {
       "dynamodb:DescribeTable",
       "dynamodb:DeleteItem"
     ]
-    resources = [aws_dynamodb_table.terraform_locks.arn]
+    resources = [aws_dynamodb_table.terraform_lock.arn]
   }
 }
 
