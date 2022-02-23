@@ -48,6 +48,41 @@ resource "aws_iam_openid_connect_provider" "default" {
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
+data "aws_iam_policy_document" "github_readonly" {
+  statement {
+    sid = "StateBucket"
+    actions = [
+      "s3:GetBucketLocation",
+      "s3:List*"
+    ]
+    resources = [module.s3_bucket.s3_bucket_arn]
+  }
+  statement {
+    sid = "StateFileRead"
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+    resources = ["${module.s3_bucket.s3_bucket_arn}/*"]
+  }
+  statement {
+    sid = "AllowDynamoDBActions"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:GetItem",
+      "dynamodb:DescribeTable",
+      "dynamodb:DeleteItem"
+    ]
+    resources = [aws_dynamodb_table.terraform_locks.arn]
+  }
+}
+
+resource "aws_iam_policy" "github_readonly" {
+  name        = "github_terraform_readonly"
+  description = "Permissions to access state bucket and dynamo table"
+  policy      = data.aws_iam_policy_document.github_readonly.json
+}
+  
 module "github_readonly" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc"
   version = "~> 4.11"
@@ -63,7 +98,8 @@ module "github_readonly" {
   provider_url = "token.actions.githubusercontent.com"
 
   role_policy_arns = [
-    "arn:aws:iam::aws:policy/AdministratorAccess",
+    "arn:aws:iam::aws:policy/ReadOnlyAccess",
+    aws_iam_policy.github_readonly.arn
   ]
 
   oidc_fully_qualified_subjects = ["repo:${var.github_org_name}/${var.github_repo_name}:pull_request"]
